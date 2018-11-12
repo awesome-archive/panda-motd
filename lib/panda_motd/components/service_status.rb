@@ -1,14 +1,8 @@
 require 'colorize'
 
-class ServiceStatus
-  attr_reader :name, :errors
-  attr_reader :results
-
+class ServiceStatus < Component
   def initialize(motd)
-    @name = 'service_status'
-    @motd = motd
-    @config = motd.config.component_config(@name)
-    @errors = []
+    super(motd, 'service_status')
   end
 
   def process
@@ -18,8 +12,9 @@ class ServiceStatus
 
   def to_s
     return "Services:\n  No matching services found." unless @results.any?
+
     longest_name_size = @results.keys.map { |k| k.to_s.length }.max
-    <<~HEREDOC
+    result = <<~HEREDOC
       Services:
       #{@results.map do |(name, status)|
         name_part = name.to_s.ljust(longest_name_size, ' ') + ':'
@@ -27,28 +22,32 @@ class ServiceStatus
         "  #{name_part} #{status_part}"
       end.join("\n")}
     HEREDOC
+
+    result.gsub(/\s$/, '')
   end
 
   private
 
   def parse_service(service)
     cmd_result = `systemctl is-active #{service[0]}`.strip
-    @errors << ComponentError.new(self, 'Unable to parse systemctl output') unless valid_responses.include? cmd_result
-    return cmd_result
+    unless valid_responses.include? cmd_result
+      @errors << ComponentError.new(self, 'Unable to parse systemctl output')
+    end
+    cmd_result
   end
 
   def parse_services(services)
-    services.map { |service| [service[1].to_sym, parse_service(service).to_sym] }.to_h
+    services.map { |s| [s[1].to_sym, parse_service(s).to_sym] }.to_h
   end
 
   def service_colors
-    return {
+    {
       active: :green,
       inactive: :red
     }
   end
 
   def valid_responses
-    return ['active', 'inactive']
+    ['active', 'inactive']
   end
 end

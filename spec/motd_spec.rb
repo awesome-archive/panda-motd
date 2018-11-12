@@ -1,17 +1,24 @@
 require 'spec_helper'
 
 describe MOTD do
-  it 'creates a new MOTD' do
-    config_path = File.join('spec', 'fixtures', 'configs', 'basic_config.yaml')
-    described_class_instance = described_class.new(config_path)
+  subject(:motd) { create(:motd) }
 
-    expect(described_class_instance).not_to be_nil
+  it 'creates a new MOTD' do
+    expect(motd).not_to be_nil
   end
 
   it 'prints the MOTD' do
-    config_path = File.join('spec', 'fixtures', 'configs', 'basic_config.yaml')
-    described_class_instance = described_class.new(config_path)
+    allow(motd.components.first).to receive(:format_uptime).and_return('')
+    expect(motd.to_s).not_to be_nil
+  end
 
-    expect(described_class_instance.to_s).not_to be_nil
+  context 'when errors exist' do
+    it 'prints the errors' do
+      component = create(:uptime)
+      component.errors << ComponentError.new(component, 'something broke')
+      motd.instance_variable_set(:@components, [component])
+
+      expect(motd.to_s).to include 'something broke'
+    end
   end
 end

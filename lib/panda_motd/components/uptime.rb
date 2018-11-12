@@ -1,14 +1,10 @@
 require 'sysinfo'
 
-class Uptime
-  attr_reader :name, :errors
+class Uptime < Component
   attr_reader :days, :hours, :minutes
 
   def initialize(motd)
-    @name = 'uptime'
-    @motd = motd
-    @config = motd.config.component_config(@name)
-    @errors = []
+    super(motd, 'uptime')
   end
 
   def process
@@ -20,7 +16,7 @@ class Uptime
   end
 
   def to_s
-    return "#{@config['prefix'] || 'up'} #{format_uptime}"
+    "#{@config['prefix'] || 'up'} #{format_uptime}"
   end
 
   private

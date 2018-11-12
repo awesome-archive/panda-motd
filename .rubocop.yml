@@ -28,12 +28,16 @@ RSpec/ExampleLength:
 RSpec/MultipleExpectations:
   Enabled: false
 
+RSpec/SubjectStub:
+  Enabled: false
+
+RSpec/FilePath:
+  CustomTransform:
+    - 'Fail2Ban'
+
 Style/BlockDelimiters:
   Exclude:
     - 'spec/**/*'
-
-Metrics/LineLength:
-  Enabled: false
 
 Style/RedundantReturn:
   Enabled: false

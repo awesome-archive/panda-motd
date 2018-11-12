@@ -2,82 +2,148 @@ require 'spec_helper'
 require 'colorize'
 
 describe SSLCertificates do
-  before do
-    stub_system_call(described_class_instance)
-    allow(File).to receive(:exist?).and_return(true) # assume all cert file paths valid
-    described_class_instance.process
-  end
-
   context 'with normal config' do
-    let(:described_class_instance) {
-      instance_with_configuration(described_class, 'enabled' => true, 'certs' => {
-                                    'taylorjthurlow.com' => '/etc/letsencrypt/live/taylorjthurlow.com/cert.pem'
-                                  })
-    }
+    subject(:component) { create(:ssl_certificates) }
 
     it 'returns the list of certificates' do
-      expect(described_class_instance.results).to eq([['taylorjthurlow.com', DateTime.parse('Jul 12 2018 08:17:27 GMT')]])
-    end
+      stub_system_call(component)
+      allow(File).to receive(:exist?).and_return(true) # valid cert path
+      component.process
 
-    # FIXME: expired SSL certificate
-    xit 'prints the list of statuses' do
-      results = described_class_instance.to_s.delete(' ') # handle variable whitespace
-      expect(results).to include 'taylorjthurlow.com' + 'validuntil'.green
+      expect(component.results).to eq([[
+                                        'thurlow.io',
+                                        Time.parse('Jul 12 2018 08:17:27 GMT')
+                                      ]])
     end
 
     context 'when printing different statuses' do
       it 'prints a valid certificate' do
-        described_class_instance.instance_variable_set(:@results, [['mycert', DateTime.now + 31]])
+        component.instance_variable_set(:@results, [['mycert', Time.now + 31]])
 
-        expect(described_class_instance.to_s.delete(' ')).to include 'validuntil'.green
+        expect(component.to_s.delete(' ')).to include 'validuntil'.green
       end
 
       it 'prints an expiring certificate' do
-        described_class_instance.instance_variable_set(:@results, [['mycert', DateTime.now + 1]])
+        component.instance_variable_set(:@results, [['mycert', Time.now + 1]])
 
-        expect(described_class_instance.to_s.delete(' ')).to include 'expiringat'.yellow
+        expect(component.to_s.delete(' ')).to include 'expiringat'.yellow
       end
 
       it 'prints an expired certificate' do
-        described_class_instance.instance_variable_set(:@results, [['mycert', DateTime.now]])
+        component.instance_variable_set(:@results, [['mycert', Time.now]])
 
-        expect(described_class_instance.to_s.delete(' ')).to include 'expiredat'.red
+        expect(component.to_s.delete(' ')).to include 'expiredat'.red
       end
     end
 
     context 'when the certificate expiration date cannot be found' do
       it 'adds an error to the component' do
-        allow(described_class_instance).to receive(:`).and_return('')
-        described_class_instance.process
+        stub_system_call(component, returns: '')
+        allow(File).to receive(:exist?).and_return(true) # valid cert path
+        component.process
 
-        expect(described_class_instance.errors.count).to eq 1
-        expect(described_class_instance.errors.first.message).to eq 'Unable to find certificate expiration date'
+        expect(component.errors.count).to eq 1
+        expect(component.errors.first.message).to eq(
+          'Unable to find certificate expiration date'
+        )
       end
     end
 
-    context 'when the certificate expiration date is found but cannot be parsed' do
+    context 'when the certificate expiration date cannot be parsed' do
       it 'adds an error to the component' do
-        allow(described_class_instance).to receive(:`).and_return("notAfter=somerandomgibberishhere\n")
-        described_class_instance.process
+        stub_system_call(
+          component,
+          returns: "notAfter=Wtf 69 42:42:42 2077 LOL\n"
+        )
+        allow(File).to receive(:exist?).and_return(true) # valid cert path
+        component.process
 
-        expect(described_class_instance.errors.count).to eq 1
-        expect(described_class_instance.errors.first.message).to eq 'Found expiration date, but unable to parse as date'
+        expect(component.errors.count).to eq 1
+        expect(component.errors.first.message).to eq(
+          'Found expiration date, but unable to parse as date'
+        )
+      end
+    end
+
+    context 'when config contains certificates that are not found' do
+      it 'prints that the certificate was not found' do
+        allow(File).to receive(:exist?).and_call_original
+        allow(File).to receive(:exist?)
+          .with('/etc/letsencrypt/live/thurlow.io/cert.pem')
+          .and_return(false) # assume cert file path is invalid
+        stub_system_call(component)
+        component.process
+
+        expect(component.to_s).to include 'Certificate thurlow.io not found'
       end
     end
   end
 
-  context 'with config containing certificates that are not found' do
-    let(:described_class_instance) {
-      instance_with_configuration(described_class, 'enabled' => true, 'certs' => {
-                                    'taylorjthurlow.com' => '/etc/letsencrypt/live/taylorjthurlow.com/cert.pem'
-                                  })
+  context 'when sorting is set to alphabetical' do
+    subject(:component) {
+      settings = { 'sort_method' => 'alphabetical',
+                   'certs' => {
+                     'def' => '/etc/letsencrypt/live/def.com/cert.pem',
+                     'abc' => '/etc/letsencrypt/live/abc.com/cert.pem',
+                     'xyz' => '/etc/letsencrypt/live/xyz.com/cert.pem'
+                   } }
+      create(:ssl_certificates, settings: settings)
     }
 
-    it 'prints that the certificate was not found' do
-      allow(File).to receive(:exist?).and_return(false) # assume cert file path is invalid
-      described_class_instance.process
+    it 'prints the certificates in alphabetical order' do
+      stub_system_call(component)
+      allow(File).to receive(:exist?).and_return(true) # valid cert path
+      component.process
 
-      expect(described_class_instance.to_s).to include 'Certificate taylorjthurlow.com not found'
+      name_list = component.to_s.split("\n")
+                           .drop(1)
+                           .map { |c| c.strip.match(/^(\S+)/)[1] }
+      expect(name_list).to eq ['abc', 'def', 'xyz']
+    end
+  end
+
+  context 'when sorting is set to expiration' do
+    subject(:component) {
+      settings = { 'sort_method' => 'expiration',
+                   'certs' => {
+                     'def' => '/etc/letsencrypt/live/def.com/cert.pem',
+                     'abc' => '/etc/letsencrypt/live/abc.com/cert.pem',
+                     'xyz' => '/etc/letsencrypt/live/xyz.com/cert.pem'
+                   } }
+      create(:ssl_certificates, settings: settings)
+    }
+
+    def systemctl_call(path)
+      return "openssl x509 -in #{path} -dates"
+    end
+
+    def stubbed_return_expiry(time_shift)
+      time = (Time.now + time_shift).strftime('%b %d %H:%M:%S %Y %Z')
+      return "notAfter=#{time}\n"
+    end
+
+    it 'prints the certificates in order of earliest expiration first' do
+      allow(File).to receive(:exist?).and_return(true) # valid cert path
+
+      allow(component).to receive(:`)
+        .with(systemctl_call('/etc/letsencrypt/live/def.com/cert.pem'))
+        .and_return(stubbed_return_expiry(3 * 60))
+
+      allow(component).to receive(:`)
+        .with(systemctl_call('/etc/letsencrypt/live/abc.com/cert.pem'))
+        .and_return(stubbed_return_expiry(1 * 60))
+
+      allow(component).to receive(:`)
+        .with(systemctl_call('/etc/letsencrypt/live/xyz.com/cert.pem'))
+        .and_return(stubbed_return_expiry(2 * 60))
+
+      component.process
+
+      name_list = component.to_s.split("\n")
+                           .drop(1)
+                           .map { |c| c.strip.match(/^(\S+)/)[1] }
+
+      expect(name_list).to eq ['abc', 'xyz', 'def']
     end
   end
 end
