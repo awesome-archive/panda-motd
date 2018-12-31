@@ -17,25 +17,29 @@ describe ServiceStatus do
       component.process
 
       results = component.to_s.delete(' ') # handle variable whitespace
-      expect(results).to include 'Plex:' + 'active'.green
-      expect(results).to include 'Sonarr:' + 'active'.green
+      expect(results).to include 'Plex' + 'active'.green
+      expect(results).to include 'Sonarr' + 'active'.green
     end
 
     context 'when printing different statuses' do
       it 'prints active in green' do
-        stub_system_call(component, returns: 'active')
-        component.process
-
         component.instance_variable_set(:@results, servicename: :active)
         expect(component.to_s).to include 'active'.green
       end
 
-      it 'prints inactive in red' do
-        stub_system_call(component, returns: 'active')
-        component.process
-
+      it 'prints inactive in yellow' do
         component.instance_variable_set(:@results, servicename: :inactive)
-        expect(component.to_s).to include 'inactive'.red
+        expect(component.to_s).to include 'inactive'.yellow
+      end
+
+      it 'prints failed in red' do
+        component.instance_variable_set(:@results, servicename: :failed)
+        expect(component.to_s).to include 'failed'.red
+      end
+
+      it 'prints unknown status in red' do
+        component.instance_variable_set(:@results, servicename: :asdf123)
+        expect(component.to_s).to include 'asdf123'.red
       end
     end
 
@@ -46,7 +50,7 @@ describe ServiceStatus do
         errors = component.errors
 
         expect(errors.count).to eq 2
-        expect(errors.first.message).to eq 'Unable to parse systemctl output'
+        expect(errors.first.message).to eq 'systemctl output was blank.'
       end
     end
   end
