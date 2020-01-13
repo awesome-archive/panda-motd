@@ -1,4 +1,6 @@
-require 'colorize'
+# frozen_string_literal: true
+
+require "colorize"
 
 class ComponentError
   attr_reader :component, :message
@@ -8,6 +10,7 @@ class ComponentError
     @message = message
   end
 
+  # Gets a printable error string in red.
   def to_s
     return "#{@component.name} error: ".red + @message.to_s
   end

@@ -1,11 +1,13 @@
 # IDE
 *.sublime-*
+tags
 
 # Bundler, Gems
 .bundle
 vendor
-Gemfile.lock
 *.gem
+doc
+.yardoc
 
 # Logs
 logs
